@@ -10,6 +10,7 @@ Convert a folder of MP3 files into a single M4B audiobook file for Apple Books.
 
 ## Usage
 
+**Convert a folder of MP3s:**
 ```
 python mp3_to_m4b.py <input_folder> [output] [-w N]
 ```
@@ -20,12 +21,21 @@ python mp3_to_m4b.py <input_folder> [output] [-w N]
 | `output` | Output `.m4b` path (default: `<input_folder>.m4b` next to input folder) |
 | `-w N`, `--workers N` | Number of parallel encoding workers (default: all CPU cores) |
 
+**Embed or replace artwork in an existing M4B:**
+```
+python mp3_to_m4b.py <book.m4b> --add-artwork <image>
+```
+
 ## Examples
 
 ```bash
+# Convert
 python mp3_to_m4b.py ~/Downloads/"My Book"
 python mp3_to_m4b.py ~/Downloads/"My Book" ~/Desktop/"My Book.m4b"
 python mp3_to_m4b.py ~/Downloads/"My Book" -w 6
+
+# Add artwork to an existing M4B
+python mp3_to_m4b.py ~/Downloads/"My Book.m4b" -a cover.jpg
 ```
 
 ## Features

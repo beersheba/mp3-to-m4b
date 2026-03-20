@@ -482,13 +482,48 @@ def convert(input_folder, output_path, workers=None):
 
 # ---------------------------------------------------------------------------
 
+def add_artwork(m4b_path, image_path):
+    """Re-mux an existing M4B in-place, embedding or replacing the cover artwork."""
+    m4b_path  = Path(m4b_path).resolve()
+    image_path = Path(image_path).resolve()
+
+    if not m4b_path.exists():
+        print(f"Error: '{m4b_path}' not found.")
+        sys.exit(1)
+    if not image_path.exists():
+        print(f"Error: '{image_path}' not found.")
+        sys.exit(1)
+
+    tmp = m4b_path.with_suffix(".tmp.m4b")
+    duration = get_duration(str(m4b_path))
+    print(f"\nEmbedding artwork into: {m4b_path.name}")
+    print(f"Image: {image_path.name}")
+    ffmpeg_with_progress(
+        ["ffmpeg", "-y", "-i", str(m4b_path), "-i", str(image_path),
+         "-map", "0:a",        # audio only from M4B (drop any existing artwork)
+         "-map", "1:v",        # new image
+         "-map_metadata", "0", # preserve all metadata
+         "-map_chapters", "0", # preserve chapters
+         "-c", "copy",
+         "-disposition:v:0", "attached_pic",
+         str(tmp)],
+        duration_sec=duration,
+        desc="Embedding artwork",
+    )
+    tmp.replace(m4b_path)
+    size_mb = m4b_path.stat().st_size / 1024 / 1024
+    print(f"\n✅  {m4b_path}")
+    print(f"    Size: {size_mb:.1f} MB")
+
+
 def main():
     import argparse
     parser = argparse.ArgumentParser(
         description="Convert a folder of MP3s into a single M4B audiobook.",
-        usage="mp3_to_m4b.py input_folder [output] [-w N]"
+        usage="mp3_to_m4b.py input_folder [output] [-w N]\n"
+              "       mp3_to_m4b.py book.m4b --add-artwork cover.jpg"
     )
-    parser.add_argument("input_folder", help="Folder containing MP3 files")
+    parser.add_argument("input_folder", help="Folder containing MP3 files, or .m4b file when using --add-artwork")
     parser.add_argument("output", nargs="?", help="Output .m4b path (default: <folder>.m4b)")
     parser.add_argument(
         "-w", "--workers",
@@ -496,7 +531,16 @@ def main():
         metavar="N",
         help=f"Parallel encoding workers (default: all CPU cores, currently {os.cpu_count()})"
     )
+    parser.add_argument(
+        "-a", "--add-artwork",
+        metavar="IMAGE",
+        help="Embed artwork into an existing .m4b file and exit"
+    )
     args = parser.parse_args()
+
+    if args.add_artwork:
+        add_artwork(args.input_folder, args.add_artwork)
+        return
 
     if not os.path.isdir(args.input_folder):
         print(f"Error: '{args.input_folder}' is not a directory.")
