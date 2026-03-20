@@ -234,9 +234,24 @@ def index_sort_key(path):
     return (int(match.group(1)), stem) if match else (float("inf"), stem)
 
 
+def restore_terminal():
+    """Re-enable CR→NL translation that ffmpeg may have disabled as a subprocess."""
+    try:
+        import termios
+        fd = sys.stdin.fileno()
+        attrs = termios.tcgetattr(fd)
+        attrs[0] |= termios.ICRNL   # map CR to NL on input
+        attrs[3] |= termios.ICANON  # canonical (line-buffered) mode
+        attrs[3] |= termios.ECHO    # echo input characters
+        termios.tcsetattr(fd, termios.TCSADRAIN, attrs)
+    except Exception:
+        pass
+
+
 def prompt(label, default):
     """Show prompt with current value in brackets. Enter keeps it, typing replaces it.
     Reads stdin directly to avoid Warp terminal input() quirks."""
+    restore_terminal()
     sys.stdout.write(f"  {label:<8} [{default}]: ")
     sys.stdout.flush()
     value = sys.stdin.readline().strip()
@@ -328,6 +343,7 @@ def convert(input_folder, output_path, workers=None):
     print(f"  {'Output':<8} : {output_path}")
 
     # 6. Final go / no-go
+    restore_terminal()
     sys.stdout.write("\nStart conversion? [Y/n]: ")
     sys.stdout.flush()
     confirm = sys.stdin.readline().strip().lower()
