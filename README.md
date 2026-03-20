@@ -2,15 +2,6 @@
 
 Convert a folder of MP3 files into a single M4B audiobook file for Apple Books.
 
-## Features
-
-- Each MP3 becomes one chapter, titled from its `TIT2` ID3 tag
-- Book title read from `TALB` tag, falls back to folder name
-- Author read from `TPE1` tag
-- Cover artwork embedded from ID3 tags or image file in the folder
-- Parallel encoding using all available CPU cores for fast conversion
-- Interactive confirmation of chapter list, title, and author before conversion
-
 ## Requirements
 
 - Python 3.7+
@@ -36,6 +27,18 @@ python mp3_to_m4b.py ~/Downloads/"My Book"
 python mp3_to_m4b.py ~/Downloads/"My Book" ~/Desktop/"My Book.m4b"
 python mp3_to_m4b.py ~/Downloads/"My Book" -w 6
 ```
+
+## Features
+
+- **Chapters** — each MP3 becomes one chapter; title taken from the `TIT2` ID3 tag, falls back to the filename stem
+- **Book title** — taken from the `TALB` tag, falls back to the folder name
+- **Author** — taken from the `TPE1` tag; if missing, parsed from the folder name when it follows the `Author - Book Title` format
+- **Folder name formats supported:**
+  - `Book Title` — title only
+  - `Author Name - Book Title` — author and title parsed automatically
+- **Artwork** — embedded from ID3 tags or an image file in the folder (`cover.jpg`, `cover.png`, etc.)
+- **Fast encoding** — parallel AAC encoding across all CPU cores
+- **Interactive confirmation** — review chapter list and edit title/author before conversion starts
 
 ## How It Works
 

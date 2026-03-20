@@ -8,7 +8,7 @@ with Apple Books. Files are sorted by leading index number (01.mp3, 02.mp3, ...)
 Features:
   - Each MP3 becomes one chapter, titled from its TIT2 ID3 tag
   - Book title taken from TALB tag, falls back to folder name
-  - Author taken from TPE1 tag
+  - Author taken from TPE1 tag, falls back to folder name if in "Author - Book" format
   - Cover artwork embedded from ID3 tags or image file in folder
   - Parallel encoding using all available CPU cores for fast conversion
   - Interactive confirmation of chapter list, title and author before conversion
@@ -145,6 +145,29 @@ def get_duration(path):
         return 0.0
 
 
+def get_audio_info(path):
+    """Return (bitrate_kbps, channels) of the first audio stream via ffprobe."""
+    result = subprocess.run(
+        ["ffprobe", "-v", "error", "-select_streams", "a:0",
+         "-show_entries", "stream=bit_rate,channels",
+         "-of", "default=noprint_wrappers=1", path],
+        stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True
+    )
+    bitrate, channels = None, None
+    for line in result.stdout.splitlines():
+        if line.startswith("bit_rate="):
+            try:
+                bitrate = max(1, int(line.split("=")[1]) // 1000)  # bps → kbps
+            except ValueError:
+                pass
+        elif line.startswith("channels="):
+            try:
+                channels = int(line.split("=")[1])
+            except ValueError:
+                pass
+    return bitrate, channels
+
+
 def sanitize(value):
     """Strip control characters that corrupt terminal output."""
     return str(value).replace("\r", "").replace("\n", " ").strip()
@@ -240,8 +263,19 @@ def convert(input_folder, output_path, workers=None):
     print(f"\nScanning {n} MP3 file(s)...")
     tags, artwork = read_mp3_tags(mp3_files[0])
     folder_name = Path(input_folder).resolve().name
-    book_title  = tags.get("album", "").strip() or folder_name
-    author     = tags.get("artist", tags.get("album_artist", "Unknown"))
+    # Parse "Author - Book Title" folder format if present
+    folder_author, folder_title = None, folder_name
+    if " - " in folder_name:
+        parts = folder_name.split(" - ", 1)
+        folder_author, folder_title = parts[0].strip(), parts[1].strip()
+    book_title = tags.get("album", "").strip() or folder_title
+    author     = tags.get("artist", tags.get("album_artist", "")).strip() or folder_author or "Unknown"
+
+    # Detect source channels; encode at 128k to give the AAC encoder enough
+    # headroom for a clean MP3→AAC transcode without audible artifacts.
+    _, src_channels = get_audio_info(mp3_files[0])
+    enc_bitrate  = 128
+    enc_channels = src_channels or 1   # fall back to mono if undetectable
 
     scanned = []   # list of (mp3_path, chapter_title, duration)
     for mp3 in mp3_files:
@@ -287,8 +321,10 @@ def convert(input_folder, output_path, workers=None):
     artwork_label = "none"
     if artwork:
         artwork_label = f"embedded ({artwork[1]})"
+    ch_label = "mono" if enc_channels == 1 else "stereo"
     print(f"  {'Year':<8} : {tags.get('year', '—')}")
     print(f"  {'Artwork':<8} : {artwork_label}")
+    print(f"  {'Encoding':<8} : {enc_bitrate}k AAC {ch_label}")
     print(f"  {'Output':<8} : {output_path}")
 
     # 6. Final go / no-go
@@ -330,7 +366,8 @@ def convert(input_folder, output_path, workers=None):
             slot = (i % workers) + 1   # bar position 1..workers
             ffmpeg_with_progress(
                 ["ffmpeg", "-y", "-i", mp3,
-                 "-vn", "-c:a", "aac", "-b:a", "128k", "-ar", "44100",
+                 "-vn", "-c:a", "aac", "-b:a", f"{enc_bitrate}k",
+                 "-ac", str(enc_channels),
                  encoded_paths[i]],
                 duration_sec=duration,
                 desc=f"[{i+1}/{n}] {chapter_title[:24]}",
